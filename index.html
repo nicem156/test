@@ -1,0 +1,480 @@
+cat > /mnt/user-data/outputs/nhiet-dung-rieng.html << 'HTMLEOF'
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#EEF4F6">
+<meta name="color-scheme" content="light">
+<title>Nhiệt dung riêng của nước</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,500..800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="lab-style.css">
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow-nav"><a href="index.html">Hóa hơi</a><span aria-hidden="true">·</span><a href="nhiet-dung-rieng.html" aria-current="page">Nhiệt dung riêng</a><span aria-hidden="true">·</span><a href="nhiet-nong-chay.html">Nhiệt nóng chảy</a></p>
+    <h1>Nhiệt dung riêng của nước</h1>
+    <p class="lede">Nhiệt lượng cần cung cấp để 1&nbsp;kg nước tăng thêm 1&nbsp;K, xác định bằng bếp điện công suất P&nbsp;=&nbsp;2000&nbsp;W, hiệu suất H&nbsp;=&nbsp;90&nbsp;%.</p>
+
+    <figure class="gauge" aria-labelledby="gauge-caption">
+      <figcaption class="gauge-caption" id="gauge-caption">Thang nhiệt dung riêng, đơn vị J/(kg·K)</figcaption>
+      <div class="gauge-track">
+        <div class="gauge-bar"></div>
+        <div class="gauge-ref" id="ref-line"></div>
+        <div class="pin pin-group" id="pin-group"></div>
+        <div class="pin pin-live" id="pin-live"></div>
+      </div>
+      <div class="gauge-scale" id="gauge-scale" aria-hidden="true"></div>
+      <dl class="gauge-readout">
+        <div class="readout">
+          <dt><span class="key key-group" aria-hidden="true"></span>Số liệu nhóm</dt>
+          <dd id="out-group"></dd>
+        </div>
+        <div class="readout">
+          <dt><span class="key key-live" aria-hidden="true"></span>Đo tại chỗ</dt>
+          <dd id="out-live"></dd>
+        </div>
+        <div class="readout">
+          <dt><span class="key key-ref" aria-hidden="true"></span>Giá trị tham khảo</dt>
+          <dd>4200 <span class="unit-inline">J/(kg·K)</span></dd>
+        </div>
+      </dl>
+    </figure>
+  </div>
+</header>
+
+<main class="wrap" id="main">
+  <noscript><p>Trang cần bật JavaScript để hiển thị bảng số liệu và đồ thị.</p></noscript>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <p>Nhiệt lượng có ích do bếp cung cấp Q<sub>ích</sub> = H·P·Δt làm nước tăng nhiệt độ từ T<sub>1</sub> lên T<sub>2</sub>: c&nbsp;=&nbsp;Q<sub>ích</sub>/(m·ΔT), với ΔT&nbsp;=&nbsp;T<sub>2</sub>&nbsp;−&nbsp;T<sub>1</sub>. Đồ thị vẽ c theo 1/ΔT: khi ΔT càng nhỏ, phần nhiệt hao ra môi trường càng ảnh hưởng nhiều đến kết quả, nên các điểm có xu hướng lệch khỏi giá trị tham khảo 4200&nbsp;J/(kg·K) khi 1/ΔT lớn.</p>
+  </div>
+</footer>
+
+<script>
+(() => {
+  'use strict';
+
+  const REF_C = 4200;                   // J/(kg·K), giá trị tham khảo
+  const P_HEAT = 2000;                  // W, công suất bếp
+  const EFF = 0.90;                     // hiệu suất bếp
+  const G_MIN = 3000, G_MAX = 5000, G_STEP = 500;
+
+  const GROUP_DATA = [
+    { t: '20', m: '0.8', T1: '30.1', T2: '41.8' },
+    { t: '20', m: '0.8', T1: '30.3', T2: '42' },
+    { t: '20', m: '0.8', T1: '30.2', T2: '41.5' }
+  ];
+  const SAMPLE_DATA = [
+    { t: '20', m: '0.8', T1: '28', T2: '38.7' },
+    { t: '30', m: '0.8', T1: '28', T2: '44.1' },
+    { t: '40', m: '0.8', T1: '28', T2: '49.4' }
+  ];
+  const FIELDS = [
+    { key: 't',  label: 'Thời gian đun Δt',       unit: 's'  },
+    { key: 'm',  label: 'Khối lượng nước m',      unit: 'kg' },
+    { key: 'T1', label: 'Nhiệt độ đầu T<sub>1</sub>', unit: '°C' },
+    { key: 'T2', label: 'Nhiệt độ sau T<sub>2</sub>', unit: '°C' }
+  ];
+  const blank = () => ({ t: '', m: '', T1: '', T2: '' });
+
+  const $ = (s, r = document) => r.querySelector(s);
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+
+  function num(s) {
+    const t = String(s == null ? '' : s).trim().replace(/\s+/g, '').replace(',', '.');
+    if (t === '') return NaN;
+    const n = Number(t);
+    return Number.isFinite(n) ? n : NaN;
+  }
+  function fmt(n, d = 0) {
+    if (!Number.isFinite(n)) return '—';
+    const s = Math.abs(n).toFixed(d);
+    const parts = s.split('.');
+    const grouped = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    const neg = n < 0 && Number(s) !== 0;
+    return (neg ? '−' : '') + grouped + (parts[1] ? ',' + parts[1] : '');
+  }
+
+  function compute(r) {
+    const out = { dT: null, Q: null, c: null, status: 'incomplete', msg: '', bad: null };
+    const keys = ['t', 'm', 'T1', 'T2'];
+    const v = {};
+    keys.forEach(k => { v[k] = num(r[k]); });
+
+    const junk = keys.find(k => String(r[k]).trim() !== '' && Number.isNaN(v[k]));
+    if (junk) { out.status = 'error'; out.bad = junk; out.msg = 'có ô không phải là số'; return out; }
+
+    if (!Number.isNaN(v.T1) && !Number.isNaN(v.T2)) {
+      if (v.T2 <= v.T1) {
+        out.status = 'error'; out.bad = 'T2';
+        out.msg = 'T<sub>2</sub> phải lớn hơn T<sub>1</sub> vì nước được đun nóng lên';
+        return out;
+      }
+      out.dT = Math.round((v.T2 - v.T1) * 1e6) / 1e6;
+    }
+    if (keys.some(k => Number.isNaN(v[k]))) return out;
+    if (v.t <= 0) { out.status = 'error'; out.bad = 't'; out.msg = 'thời gian đun phải lớn hơn 0'; return out; }
+    if (v.m <= 0) { out.status = 'error'; out.bad = 'm'; out.msg = 'khối lượng nước phải là số dương'; return out; }
+
+    out.status = 'ok';
+    out.Q = P_HEAT * EFF * v.t;
+    out.c = out.Q / (v.m * out.dT);
+    return out;
+  }
+
+  function statsOf(valid) {
+    const n = valid.length;
+    if (!n) return null;
+    const mean = valid.reduce((s, r) => s + r.c, 0) / n;
+    const dev = valid.reduce((s, r) => s + Math.abs(r.c - mean), 0) / n;
+    return { n, mean, dev, rel: dev / mean, diff: (mean - REF_C) / REF_C };
+  }
+
+  function niceTicks(min, max, target) {
+    const range = (max - min) || 1;
+    const raw = range / target;
+    const p = Math.pow(10, Math.floor(Math.log10(raw)));
+    const f = raw / p;
+    const step = (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p;
+    const start = Math.floor(min / step + 1e-9) * step;
+    const end = Math.ceil(max / step - 1e-9) * step;
+    const list = [];
+    for (let x = start; x <= end + step * 0.001; x += step) list.push(+x.toPrecision(12));
+    return { list, min: start, max: end, step };
+  }
+
+  function drawChart(host, pts, kind, width, opts) {
+    if (!pts.length) {
+      host.innerHTML = '<p class="empty">Đồ thị xuất hiện khi có ít nhất một lần đo hợp lệ.</p>';
+      return;
+    }
+    const w = Math.max(280, width || 600);
+    const h = Math.round(clamp(w * 0.62, 260, 380));
+    const m = { l: 58, r: 16, t: 18, b: 50 };
+
+    const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+    const yLo = Math.min(...ys, opts.ref), yHi = Math.max(...ys, opts.ref);
+    const pad = ((yHi - yLo) || Math.abs(opts.ref) * 0.2) * 0.3;
+    const xt = niceTicks(0, Math.max(...xs) * 1.12, 5);
+    const yt = niceTicks(yLo - pad, yHi + pad, 5);
+
+    const sx = v => m.l + (v - xt.min) / (xt.max - xt.min) * (w - m.l - m.r);
+    const sy = v => h - m.b - (v - yt.min) / (yt.max - yt.min) * (h - m.t - m.b);
+    const xDec = xt.step >= 1 ? 0 : Math.min(4, Math.ceil(-Math.log10(xt.step)));
+
+    let s = '';
+    yt.list.forEach(v => {
+      s += `<line class="grid" x1="${m.l}" x2="${w - m.r}" y1="${sy(v).toFixed(1)}" y2="${sy(v).toFixed(1)}"/>`;
+      s += `<text x="${m.l - 8}" y="${(sy(v) + 4).toFixed(1)}" text-anchor="end">${fmt(v, 0)}</text>`;
+    });
+    xt.list.forEach(v => {
+      s += `<text x="${sx(v).toFixed(1)}" y="${h - m.b + 18}" text-anchor="middle">${fmt(v, xDec)}</text>`;
+    });
+    s += `<line class="axis" x1="${m.l}" x2="${w - m.r}" y1="${h - m.b}" y2="${h - m.b}"/>`;
+    s += `<line class="axis" x1="${m.l}" x2="${m.l}" y1="${m.t}" y2="${h - m.b}"/>`;
+
+    const ry = sy(opts.ref).toFixed(1);
+    s += `<line class="ref" x1="${m.l}" x2="${w - m.r}" y1="${ry}" y2="${ry}"/>`;
+    s += `<text class="ref-label" x="${w - m.r - 4}" y="${(sy(opts.ref) - 7).toFixed(1)}" text-anchor="end">Tham khảo ${fmt(opts.ref, 0)}</text>`;
+
+    if (pts.length >= 2) {
+      const n = pts.length, mx = xs.reduce((a, b) => a + b, 0) / n, my = ys.reduce((a, b) => a + b, 0) / n;
+      const sxx = xs.reduce((a, x) => a + (x - mx) ** 2, 0);
+      if (sxx > 1e-12) {
+        const b = xs.reduce((a, x, i) => a + (x - mx) * (ys[i] - my), 0) / sxx;
+        const a0 = my - b * mx;
+        const span = Math.max(...xs) - Math.min(...xs);
+        const x1 = Math.max(xt.min, Math.min(...xs) - span * 0.08);
+        const x2 = Math.min(xt.max, Math.max(...xs) + span * 0.08);
+        const y1 = clamp(a0 + b * x1, yt.min, yt.max), y2 = clamp(a0 + b * x2, yt.min, yt.max);
+        s += `<line class="fit" x1="${sx(x1).toFixed(1)}" y1="${sy(y1).toFixed(1)}" x2="${sx(x2).toFixed(1)}" y2="${sy(y2).toFixed(1)}"/>`;
+      }
+    }
+
+    pts.forEach(p => {
+      const cx = sx(p.x), cy = sy(p.y);
+      const tip = `Lần ${p.n}: ${opts.tip(p)}`;
+      if (kind === 'live') {
+        s += `<path class="pt-live" d="M${cx.toFixed(1)} ${(cy - 8).toFixed(1)} L${(cx + 8).toFixed(1)} ${cy.toFixed(1)} L${cx.toFixed(1)} ${(cy + 8).toFixed(1)} L${(cx - 8).toFixed(1)} ${cy.toFixed(1)}Z"><title>${tip}</title></path>`;
+      } else {
+        s += `<circle class="pt-group" cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="6.5"><title>${tip}</title></circle>`;
+      }
+      s += `<text class="pt-num" x="${(cx + 10).toFixed(1)}" y="${(cy - 9).toFixed(1)}">${p.n}</text>`;
+    });
+
+    s += `<text x="${((m.l + w - m.r) / 2).toFixed(1)}" y="${h - 8}" text-anchor="middle">${opts.xLabel}</text>`;
+    const cyT = ((m.t + h - m.b) / 2).toFixed(1);
+    s += `<text transform="rotate(-90 16 ${cyT})" x="16" y="${cyT}" text-anchor="middle">${opts.yLabel}</text>`;
+
+    host.innerHTML = `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Đồ thị với ${pts.length} điểm đo">${s}</svg>`;
+  }
+
+  function sectionHTML(kind, title, desc, editable) {
+    const th = (html, unit, cls) =>
+      `<th scope="col"${cls ? ` class="${cls}"` : ''}>${html}<span class="unit">(${unit})</span></th>`;
+    const actions = editable ? `
+      <div class="actions">
+        <button type="button" class="btn btn-primary" data-act="add">Thêm lần đo</button>
+        <button type="button" class="btn" data-act="sample">Điền dữ liệu mẫu</button>
+        <button type="button" class="btn btn-danger" data-act="clear">Xóa bảng</button>
+      </div>` : '';
+    return `
+      <header class="exp-head">
+        <h2><span class="swatch swatch-${kind}" aria-hidden="true"></span>${title}</h2>
+        <p>${desc}</p>
+      </header>
+      <div class="table-wrap" role="region" aria-label="Bảng số liệu: ${title}" tabindex="0">
+        <table class="data">
+          <thead><tr>
+            <th scope="col" class="c-n">Lần</th>
+            ${th('Thời gian đun Δt', 's')}
+            ${th('Khối lượng nước m', 'kg')}
+            ${th('Nhiệt độ đầu T<sub>1</sub>', '°C')}
+            ${th('Nhiệt độ sau T<sub>2</sub>', '°C')}
+            ${th('Độ tăng nhiệt ΔT', 'K')}
+            ${th('Nhiệt dung riêng c', 'J/(kg·K)', 'c-result')}
+            ${editable ? '<th scope="col" class="c-del"><span class="sr-only">Xóa dòng</span></th>' : ''}
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      ${actions}
+      <ul class="notes" aria-live="polite"></ul>
+      <div class="analysis">
+        <div class="calc"></div>
+        <figure class="chart">
+          <figcaption>
+            <h3>Đồ thị c theo 1/ΔT</h3>
+            <p class="formula">c = H·P·Δt/m · (1/ΔT)</p>
+          </figcaption>
+          <div class="chart-host"></div>
+          <ul class="legend">
+            <li><span class="key key-${kind}" aria-hidden="true"></span>Lần đo</li>
+            <li><span class="line-key" aria-hidden="true"></span>Đường xu hướng</li>
+            <li><span class="line-key dashed" aria-hidden="true"></span>Giá trị tham khảo</li>
+          </ul>
+        </figure>
+      </div>`;
+  }
+
+  function makeExperiment(section, opts) {
+    const { kind, editable, initial, onStats } = opts;
+    let rows = initial.map(r => Object.assign({}, r));
+    const tbody = $('tbody', section), notes = $('.notes', section);
+    const calc = $('.calc', section), host = $('.chart-host', section);
+    let lastW = 0, pts = [];
+
+    function rowEl(r, i) {
+      const tr = document.createElement('tr');
+      const th = document.createElement('th');
+      th.scope = 'row'; th.textContent = i + 1; tr.append(th);
+      FIELDS.forEach(f => {
+        const td = document.createElement('td');
+        if (editable) {
+          const inp = document.createElement('input');
+          inp.type = 'text'; inp.inputMode = 'decimal'; inp.autocomplete = 'off';
+          inp.className = 'cell-input'; inp.value = r[f.key];
+          inp.dataset.key = f.key; inp.dataset.row = i;
+          inp.setAttribute('aria-label', `${f.label.replace(/<[^>]+>/g, '')}, lần ${i + 1}, đơn vị ${f.unit}`);
+          td.append(inp);
+        } else {
+          td.textContent = String(r[f.key]).replace('.', ',');
+        }
+        tr.append(td);
+      });
+      const dT = document.createElement('td'); dT.dataset.out = 'dT'; dT.className = 'calc-cell';
+      const c = document.createElement('td'); c.dataset.out = 'c'; c.className = 'calc-cell result';
+      tr.append(dT, c);
+      if (editable) {
+        const td = document.createElement('td'); td.className = 'c-del';
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'icon-btn'; b.dataset.del = i; b.textContent = '×';
+        b.setAttribute('aria-label', `Xóa lần đo ${i + 1}`);
+        td.append(b); tr.append(td);
+      }
+      return tr;
+    }
+
+    function renderCalc(st) {
+      if (!st) {
+        calc.innerHTML = '<h3>Xử lý số liệu</h3><p class="empty">Chưa có lần đo hợp lệ. Nhập đủ Δt, m, T<sub>1</sub> và T<sub>2</sub> ở một dòng để tính c.</p>';
+        return;
+      }
+      const multi = st.n > 1;
+      const sign = st.diff >= 0 ? '+' : '−';
+      const result = multi
+        ? `c = (${fmt(st.mean, 0)} ± ${fmt(st.dev, 0)}) J/(kg·K)`
+        : `c = ${fmt(st.mean, 0)} J/(kg·K)`;
+      calc.innerHTML = `
+        <h3>Xử lý số liệu</h3>
+        <p class="result-value">${result}</p>
+        ${multi ? '' : '<p class="empty">Cần ít nhất 2 lần đo hợp lệ để tính sai số.</p>'}
+        <dl class="calc-list">
+          <div class="calc-row"><dt>Công suất có ích<small>H·P với H = 90&nbsp;%, P = 2000&nbsp;W</small></dt><dd>${fmt(P_HEAT * EFF, 0)} W</dd></div>
+          <div class="calc-row"><dt>Số lần đo hợp lệ<small>n</small></dt><dd>${st.n}</dd></div>
+          <div class="calc-row"><dt>Giá trị trung bình<small><span class="bar">c</span> = (c<sub>1</sub> + … + c<sub>n</sub>) / n</small></dt><dd>${fmt(st.mean, 0)} J/(kg·K)</dd></div>
+          <div class="calc-row"><dt>Sai số tuyệt đối trung bình<small>Δ<span class="bar">c</span> = (|c<sub>1</sub> − <span class="bar">c</span>| + … ) / n</small></dt><dd>${multi ? fmt(st.dev, 0) + ' J/(kg·K)' : '—'}</dd></div>
+          <div class="calc-row"><dt>Sai số tương đối<small>δ = Δ<span class="bar">c</span> / <span class="bar">c</span></small></dt><dd>${multi ? fmt(st.rel * 100, 1) + ' %' : '—'}</dd></div>
+          <div class="calc-row"><dt>So với giá trị tham khảo<small>4200 J/(kg·K)</small></dt><dd>${sign}${fmt(Math.abs(st.diff) * 100, 1)} %</dd></div>
+        </dl>`;
+    }
+
+    function draw() {
+      lastW = Math.round(host.clientWidth);
+      drawChart(host, pts, kind, lastW || 600, {
+        ref: REF_C,
+        xLabel: '1/ΔT (1/K)',
+        yLabel: 'c (J/(kg·K))',
+        tip: p => `1/ΔT = ${fmt(p.x, 3)} 1/K, c = ${fmt(p.y, 0)} J/(kg·K)`
+      });
+    }
+
+    function refresh() {
+      const res = rows.map(compute);
+      [...tbody.rows].forEach((tr, i) => {
+        const r = res[i];
+        $('[data-out="dT"]', tr).textContent = r.dT != null ? fmt(r.dT, 1) : '—';
+        $('[data-out="c"]', tr).textContent = r.c != null ? fmt(r.c, 0) : '—';
+        if (editable) {
+          tr.querySelectorAll('.cell-input').forEach(inp => {
+            if (r.status === 'error' && inp.dataset.key === r.bad) inp.setAttribute('aria-invalid', 'true');
+            else inp.removeAttribute('aria-invalid');
+          });
+        }
+      });
+      notes.innerHTML = res
+        .map((r, i) => r.status === 'error' ? `<li>Lần ${i + 1}: ${r.msg}.</li>` : '')
+        .join('');
+
+      const valid = res.map((r, i) => Object.assign({ n: i + 1 }, r)).filter(r => r.status === 'ok');
+      pts = valid.map(r => ({ n: r.n, x: 1 / r.dT, y: r.c }));
+      const st = statsOf(valid);
+      renderCalc(st);
+      draw();
+      onStats(kind, st);
+    }
+
+    function buildRows() {
+      tbody.replaceChildren(...rows.map(rowEl));
+      refresh();
+    }
+
+    if (editable) {
+      tbody.addEventListener('input', e => {
+        const inp = e.target.closest('.cell-input');
+        if (!inp) return;
+        rows[+inp.dataset.row][inp.dataset.key] = inp.value;
+        refresh();
+      });
+      tbody.addEventListener('keydown', e => {
+        if (e.key !== 'Enter') return;
+        const inp = e.target.closest('.cell-input');
+        if (!inp) return;
+        e.preventDefault();
+        const next = +inp.dataset.row + 1;
+        if (next >= rows.length) { rows.push(blank()); buildRows(); }
+        const target = $(`.cell-input[data-row="${next}"][data-key="${inp.dataset.key}"]`, tbody);
+        if (target) target.focus();
+      });
+      tbody.addEventListener('click', e => {
+        const b = e.target.closest('[data-del]');
+        if (!b) return;
+        const i = +b.dataset.del;
+        if (rows.length === 1) rows[0] = blank(); else rows.splice(i, 1);
+        buildRows();
+      });
+      section.addEventListener('click', e => {
+        const a = e.target.closest('[data-act]');
+        if (!a) return;
+        const act = a.dataset.act;
+        if (act === 'add') {
+          rows.push(blank()); buildRows();
+          const first = $(`.cell-input[data-row="${rows.length - 1}"]`, tbody);
+          if (first) first.focus();
+        } else if (act === 'sample') {
+          rows = SAMPLE_DATA.map(r => Object.assign({}, r)); buildRows();
+        } else if (act === 'clear') {
+          const hasData = rows.some(r => Object.values(r).some(v => String(v).trim() !== ''));
+          if (hasData && !window.confirm('Xóa toàn bộ số liệu trong bảng này?')) return;
+          rows = [blank(), blank(), blank()]; buildRows();
+        }
+      });
+    }
+
+    if ('ResizeObserver' in window) {
+      new ResizeObserver(() => {
+        const w = Math.round(host.clientWidth);
+        if (w && w !== lastW) draw();
+      }).observe(host);
+    }
+    buildRows();
+  }
+
+  const gauge = {
+    group: { pin: $('#pin-group'), out: $('#out-group') },
+    live:  { pin: $('#pin-live'),  out: $('#out-live')  }
+  };
+  const latest = { group: null, live: null };
+  let gaugeReady = false;
+  const pct = v => clamp((v - G_MIN) / (G_MAX - G_MIN), 0, 1) * 100;
+
+  function applyGauge(kind) {
+    if (!gaugeReady) return;
+    const g = gauge[kind], st = latest[kind];
+    if (!st) {
+      g.pin.classList.remove('is-on');
+      g.out.innerHTML = '<span class="readout-note">Chưa có dữ liệu hợp lệ</span>';
+      return;
+    }
+    g.pin.style.left = pct(st.mean) + '%';
+    g.pin.classList.add('is-on');
+    const outside = st.mean < G_MIN || st.mean > G_MAX;
+    g.out.innerHTML =
+      `${fmt(st.mean, 0)} <span class="unit-inline">J/(kg·K)</span>` +
+      (st.n > 1 ? `<span class="readout-note">sai số tương đối ${fmt(st.rel * 100, 1)} %</span>` : '') +
+      (outside ? '<span class="readout-note">nằm ngoài thang đo</span>' : '');
+  }
+  function updateGauge(kind, st) { latest[kind] = st; applyGauge(kind); }
+
+  $('#ref-line').style.left = pct(REF_C) + '%';
+  const scale = $('#gauge-scale');
+  for (let v = G_MIN; v <= G_MAX + 1; v += G_STEP) {
+    const s = document.createElement('span');
+    s.style.left = pct(v) + '%';
+    s.textContent = fmt(v, 0);
+    scale.append(s);
+  }
+
+  const main = $('#main');
+  [
+    { kind: 'group', id: 'exp-group', editable: false, initial: GROUP_DATA,
+      title: 'Số liệu nhóm đã đo',
+      desc: 'Các lần đun của nhóm, kèm nhiệt dung riêng tính được ở mỗi lần.' },
+    { kind: 'live', id: 'exp-live', editable: true, initial: [blank(), blank(), blank()],
+      title: 'Thực hành đo tại chỗ',
+      desc: 'Nhập số liệu của bạn vào bảng. ΔT, c, đồ thị và thang đo phía trên tự cập nhật.' }
+  ].forEach(cfg => {
+    const sec = document.createElement('section');
+    sec.className = 'exp'; sec.id = cfg.id;
+    sec.innerHTML = sectionHTML(cfg.kind, cfg.title, cfg.desc, cfg.editable);
+    main.append(sec);
+    makeExperiment(sec, { kind: cfg.kind, editable: cfg.editable, initial: cfg.initial, onStats: updateGauge });
+  });
+
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    gaugeReady = true;
+    applyGauge('group'); applyGauge('live');
+  }));
+})();
+</script>
+</body>
+</html>
+HTMLEOF
+echo OK
